@@ -6,9 +6,9 @@
 - Studentennummer: 202301626
 - E-mailadres: <Oguz.celikoz@student.hogent.be>
 
-- Student: VOORNAAM NAAM
-- Studentennummer: xxxxxxxxx
-- E-mailadres: <voornaam.naam@student.hogent.be>
+- Student: Said-Salih Gaytarov
+- Studentennummer: 202408541
+- E-mailadres: <saidsalih.Gaytarov@student.hogent.be>
 
 ## Vereisten
 

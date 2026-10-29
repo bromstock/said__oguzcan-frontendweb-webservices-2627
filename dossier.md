@@ -12,9 +12,9 @@
 - **Student:** Oguzcan Celikoz
 - **Studentennummer:** 202301626
 - **E-mailadres:** <Oguz.celikoz@student.hogent.be>
-- **Student:** Voornaam Naam
-- **Studentennummer:** xxxxxxxx
-- **E-mailadres:** <voornaam.naam@student.hogent.be>
+- **Student:** Said-Salih Gaytarov
+- **Studentennummer:** 202408541
+- **E-mailadres:** <saidsalih.Gaytarov@student.hogent.be>
 - **GitHub repository:** <https://github.com/bromstock/said__oguzcan-frontendweb-webservices-2627.git>
 - **Online versies:**
   - **Back-end:** <LINK_NAAR_ONLINE_BACKEND>
