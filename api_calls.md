@@ -1,0 +1,11 @@
+** de api calls dat er kunnen gedaan worden
+- GET /api/builds: alle builds met minstens één component met de gebruiker die de build toegevoegd heeft
+- GET /api/builds/:id: één build met minstens één component en de gebruiker die de build toegevoegd heeft
+- POST /api/builds: build toevoegen met minstens één component
+- PUT /api/builds/:id: build aanpassen
+- DELETE /api/builds/:id: build verwijderen
+- GET /api/builds/:buildId/components: alle components van een builds ophalen
+- POST /api/builds/:buildId/components: een ingrediënt toevoegen aan een recept
+- PUT /api/builds/:buildId/components/:id: een ingrediënt van een recept aanpassen
+- DELETE /api/builds/:buildsId/components/:id: een ingrediënt van een recept verwijderen
+- GET /api/users/me/builds user's builds opvragen
