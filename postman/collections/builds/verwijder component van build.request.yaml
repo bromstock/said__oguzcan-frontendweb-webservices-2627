@@ -1,0 +1,10 @@
+$kind: http-request
+name: verwijder component van build
+url: '{{base_url}}/builds/1/components/1'
+method: DELETE
+order: 9000
+pathVariables:
+  - key: buildId
+    value: '1'
+  - key: componentId
+    value: '1'

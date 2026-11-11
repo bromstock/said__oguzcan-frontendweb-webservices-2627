@@ -1,0 +1,65 @@
+$kind: http-request
+url: "{{base_url}}/categories"
+method: GET
+order: 4000
+scripts:
+  - type: beforeRequest
+    code: |-
+      const categories = [
+        { name: 'CPU',          description: 'Central Processing Units' },
+        { name: 'GPU',          description: 'Graphics Processing Units' },
+        { name: 'Motherboard',  description: 'Main circuit boards' },
+        { name: 'RAM',          description: 'Random Access Memory modules' },
+        { name: 'SSD',          description: 'Solid State Drives' },
+        { name: 'HDD',          description: 'Hard Disk Drives' },
+        { name: 'PSU',          description: 'Power Supply Units' },
+        { name: 'Case',         description: 'PC chassis and enclosures' },
+        { name: 'CPU Cooler',   description: 'Air and liquid CPU coolers' },
+        { name: 'Case Fan',     description: 'Case airflow fans' },
+        { name: 'Optical Drive', description: 'CD/DVD/Blu-ray drives' },
+      ];
+
+      const baseUrl = pm.environment.get('base_url') || pm.collectionVariables.get('base_url');
+
+      let completed = 0;
+      let failed = 0;
+      const errors = [];
+
+      function sendNext(index) {
+        if (index >= categories.length) {
+          console.log(`✅ Seeding done: ${completed} created, ${failed} failed.`);
+          if (errors.length > 0) {
+            console.warn('Errors:', JSON.stringify(errors));
+          }
+          pm.variables.set('seed_summary', `Created: ${completed}, Failed: ${failed}`);
+          return;
+        }
+
+        const cat = categories[index];
+
+        pm.sendRequest({
+          url: baseUrl + '/categories',
+          method: 'POST',
+          header: { 'Content-Type': 'application/json' },
+          body: {
+            mode: 'raw',
+            raw: JSON.stringify(cat)
+          }
+        }, function (err, res) {
+          if (err) {
+            failed++;
+            errors.push({ category: cat.name, error: err.message });
+          } else if (res.code === 201) {
+            completed++;
+            console.log(`✔ Created: ${cat.name} (id: ${res.json().category_id})`);
+          } else {
+            failed++;
+            errors.push({ category: cat.name, status: res.code, body: res.text() });
+            console.warn(`✘ Failed: ${cat.name} — ${res.code} ${res.text()}`);
+          }
+          sendNext(index + 1);
+        });
+      }
+
+      sendNext(0);
+    language: text/javascript

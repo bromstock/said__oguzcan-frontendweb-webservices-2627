@@ -1,0 +1,8 @@
+$kind: http-request
+name: een component
+url: '{{base_url}}/components/1'
+method: GET
+order: 2000
+pathVariables:
+  - key: componentId
+    value: '1'

@@ -1,0 +1,17 @@
+$kind: http-request
+name: pas build aan
+url: '{{base_url}}/builds/1'
+method: PUT
+order: 4000
+headers:
+  Content-Type: application/json
+pathVariables:
+  - key: buildId
+    value: '1'
+body:
+  type: json
+  content: |-
+    {
+      "name": "Updated Build Name",
+      "description": "Updated description"
+    }

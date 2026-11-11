@@ -1,0 +1,84 @@
+$kind: http-request
+name: seed alle componenten
+url: '{{base_url}}/components'
+method: GET
+order: 5000
+scripts:
+  - type: beforeRequest
+    language: text/javascript
+    code: |-
+      // ============================================================
+      // CONFIGURATIE
+      // ============================================================
+      const AMOUNT_PER_CATEGORY = 5; // aantal componenten per categorie
+      // ============================================================
+
+      const baseUrl = pm.environment.get('base_url') || pm.collectionVariables.get('base_url');
+
+      // Stap 1: haal alle categorieën op
+      pm.sendRequest({
+        url: baseUrl + '/categories',
+        method: 'GET',
+        header: { 'Content-Type': 'application/json' }
+      }, function (err, res) {
+        if (err || res.code !== 200) {
+          console.error('❌ Kon categorieën niet ophalen:', err ? err.message : res.text());
+          return;
+        }
+
+        const categories = res.json();
+        console.log(`📋 ${categories.length} categorieën gevonden. Start seeding...`);
+
+        let totalCreated = 0;
+        let totalFailed  = 0;
+
+        // Bouw een platte lijst van alle componenten die aangemaakt moeten worden
+        const tasks = [];
+        categories.forEach(function (cat) {
+          const prefix = cat.name.toLowerCase().replace(/\s+/g, '_');
+          for (let i = 1; i <= AMOUNT_PER_CATEGORY; i++) {
+            tasks.push({
+              name: `${prefix}${i}`,
+              description: `${cat.name} nummer ${i}`,
+              category_id: cat.category_id
+            });
+          }
+        });
+
+        console.log(`🔧 ${tasks.length} componenten worden aangemaakt (${AMOUNT_PER_CATEGORY} per categorie)...`);
+
+        // Stap 2: stuur de requests één voor één (recursief zodat volgorde gegarandeerd is)
+        function sendNext(index) {
+          if (index >= tasks.length) {
+            console.log(`✅ Seeding klaar! Aangemaakt: ${totalCreated}, Mislukt: ${totalFailed}`);
+            pm.variables.set('seed_summary', `Aangemaakt: ${totalCreated}, Mislukt: ${totalFailed}`);
+            return;
+          }
+
+          const component = tasks[index];
+
+          pm.sendRequest({
+            url: baseUrl + '/components',
+            method: 'POST',
+            header: { 'Content-Type': 'application/json' },
+            body: {
+              mode: 'raw',
+              raw: JSON.stringify(component)
+            }
+          }, function (err, res) {
+            if (err) {
+              totalFailed++;
+              console.warn(`✘ Fout bij ${component.name}: ${err.message}`);
+            } else if (res.code === 201) {
+              totalCreated++;
+              console.log(`✔ [${index + 1}/${tasks.length}] ${component.name} aangemaakt (id: ${res.json().component_id})`);
+            } else {
+              totalFailed++;
+              console.warn(`✘ [${index + 1}/${tasks.length}] ${component.name} mislukt — ${res.code}: ${res.text()}`);
+            }
+            sendNext(index + 1);
+          });
+        }
+
+        sendNext(0);
+      });

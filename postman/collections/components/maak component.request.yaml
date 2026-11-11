@@ -1,0 +1,25 @@
+$kind: http-request
+name: maak component
+url: '{{base_url}}/components'
+method: POST
+order: 3000
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "name": "RTX 4090",
+      "manufacturer": "NVIDIA",
+      "form_factor": "ATX",
+      "tdp_watts": 450,
+      "storage": null,
+      "ram": null,
+      "speed": null,
+      "case_volume": null,
+      "noise_level_db": 40,
+      "description": "High-end GPU",
+      "detail": "16384 CUDA cores",
+      "price": 1599.99,
+      "category_id": 1
+    }

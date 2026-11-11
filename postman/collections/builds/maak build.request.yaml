@@ -1,0 +1,21 @@
+$kind: http-request
+name: maak build
+url: '{{base_url}}/builds'
+method: POST
+order: 3000
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "name": "My Build",
+      "description": "A sample build",
+      "user_id": 1,
+      "components": [
+        {
+          "component_id": 1,
+          "quantity": 2
+        }
+      ]
+    }

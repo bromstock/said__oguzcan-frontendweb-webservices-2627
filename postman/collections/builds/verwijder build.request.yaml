@@ -1,0 +1,8 @@
+$kind: http-request
+name: verwijder build
+url: '{{base_url}}/builds/1'
+method: DELETE
+order: 5000
+pathVariables:
+  - key: buildId
+    value: '1'

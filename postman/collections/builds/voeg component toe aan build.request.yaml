@@ -1,0 +1,18 @@
+$kind: http-request
+name: voeg component toe aan build
+url: '{{base_url}}/builds/1/components/1'
+method: POST
+order: 7000
+headers:
+  Content-Type: application/json
+pathVariables:
+  - key: buildId
+    value: '1'
+  - key: componentId
+    value: '1'
+body:
+  type: json
+  content: |-
+    {
+      "quantity": 1
+    }

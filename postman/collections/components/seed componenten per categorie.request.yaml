@@ -1,0 +1,65 @@
+$kind: http-request
+name: seed componenten per categorie
+url: '{{base_url}}/components'
+method: GET
+order: 4000
+scripts:
+  - type: beforeRequest
+    language: text/javascript
+    code: |-
+      // ============================================================
+      // CONFIGURATIE — pas deze twee waarden aan naar wens
+      // ============================================================
+      const CATEGORY_NAME = 'gpu';   // prefix voor de namen: gpu1, gpu2, ...
+      const CATEGORY_ID   = 2;       // category_id uit jouw database
+      const AMOUNT        = 5;       // aantal componenten om aan te maken
+      // ============================================================
+
+      const baseUrl = pm.environment.get('base_url') || pm.collectionVariables.get('base_url');
+
+      let completed = 0;
+      let failed = 0;
+      const errors = [];
+
+      function sendNext(index) {
+        if (index > AMOUNT) {
+          console.log(`✅ Seeding klaar: ${completed} aangemaakt, ${failed} mislukt.`);
+          if (errors.length > 0) {
+            console.warn('Fouten:', JSON.stringify(errors));
+          }
+          pm.variables.set('seed_summary', `Aangemaakt: ${completed}, Mislukt: ${failed}`);
+          return;
+        }
+
+        const component = {
+          name: `${CATEGORY_NAME}${index}`,
+          description: `${CATEGORY_NAME} nummer ${index}`,
+          category_id: CATEGORY_ID
+        };
+
+        pm.sendRequest({
+          url: baseUrl + '/components',
+          method: 'POST',
+          header: { 'Content-Type': 'application/json' },
+          body: {
+            mode: 'raw',
+            raw: JSON.stringify(component)
+          }
+        }, function (err, res) {
+          if (err) {
+            failed++;
+            errors.push({ name: component.name, error: err.message });
+            console.warn(`✘ Fout bij ${component.name}: ${err.message}`);
+          } else if (res.code === 201) {
+            completed++;
+            console.log(`✔ Aangemaakt: ${component.name} (id: ${res.json().component_id})`);
+          } else {
+            failed++;
+            errors.push({ name: component.name, status: res.code, body: res.text() });
+            console.warn(`✘ Mislukt: ${component.name} — ${res.code} ${res.text()}`);
+          }
+          sendNext(index + 1);
+        });
+      }
+
+      sendNext(1);

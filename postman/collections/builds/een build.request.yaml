@@ -1,0 +1,5 @@
+$kind: http-request
+url: "{{base_url}}/builds/id"
+method: GET
+examples: .resources/een build.resources/examples
+order: 2000

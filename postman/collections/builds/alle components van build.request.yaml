@@ -1,0 +1,8 @@
+$kind: http-request
+name: alle components van build
+url: '{{base_url}}/builds/1/components'
+method: GET
+order: 6000
+pathVariables:
+  - key: buildId
+    value: '1'

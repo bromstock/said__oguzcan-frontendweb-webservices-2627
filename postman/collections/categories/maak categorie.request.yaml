@@ -1,0 +1,14 @@
+$kind: http-request
+name: maak categorie
+url: '{{base_url}}/categories'
+method: POST
+order: 3000
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "name": "GPU",
+      "description": "Graphics Processing Units"
+    }

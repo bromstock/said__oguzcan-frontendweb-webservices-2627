@@ -1,0 +1,8 @@
+$kind: http-request
+name: gerelateerde builds per categorie
+url: '{{base_url}}/builds/1/categories'
+method: GET
+order: 10000
+pathVariables:
+  - key: buildId
+    value: '1'

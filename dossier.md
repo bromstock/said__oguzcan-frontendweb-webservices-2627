@@ -48,7 +48,7 @@
 
 > **Instructie:** Voeg hier een afbeelding van jouw ERD toe en licht de belangrijkste entiteiten en relaties kort toe.
 
-![ERD](/ERD.png)
+![ERD](https://kroki.io/erd/svg/eNptUMuOwjAMvPsrcibqgV9YvmFP1SoyiYFIea2TgPh7knZTlRUnezyjGdvzKfoUA4XyAwc9emUNBPQEHkO9oC6VieES2auOIkMxST2wlAy5QbwSMHrIiciAxkzqHl1tBiHaBhzdySlzBkNZs03FxtD6gtZBYqsJpMZC18jPHg3z6Q_1pXbEstPeA-avap1psnOvHzWyZuLV9rt1TTsGvS5y8ssmmPMjslE3zLdhvfuP3DLk26d-K4ZiyxNgE4vDNB3FuALenYTs5DJbGXGcJik2_qP8H7sG9Hv2eAS-ADCIpdc=)
 
 [Korte toelichting bij het ERD...]
 

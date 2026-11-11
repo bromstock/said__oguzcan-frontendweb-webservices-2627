@@ -1,0 +1,8 @@
+$kind: http-request
+name: components van categorie
+url: '{{base_url}}/categories/1/components'
+method: GET
+order: 2000
+pathVariables:
+  - key: categoriesId
+    value: '1'
