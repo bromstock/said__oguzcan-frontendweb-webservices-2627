@@ -6,13 +6,6 @@ import { InMemoryStore } from '../in-memory-store';
 export class UsersService {
   constructor(private readonly store: InMemoryStore) {}
 
-  findAll() {
-    return this.store.users.map(({ user_id, username, email }) => ({
-      user_id,
-      username,
-      email,
-    }));
-  }
 
   create(dto: CreateUserDto) {
     if (
