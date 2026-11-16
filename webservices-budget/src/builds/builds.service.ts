@@ -3,45 +3,54 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { InMemoryStore } from '../in-memory-store';
+import { and, eq, inArray, ne } from 'drizzle-orm';
+import { UpdateBuildComponentDto } from '../build-components/update-build-component.dto';
+import { DatabaseService } from '../database/database.service';
+import {
+  buildComponents,
+  builds,
+  categories,
+  components,
+  users,
+} from '../database/schema';
 import { CreateBuildDto } from './create-build.dto';
 import { UpdateBuildDto } from './update-build.dto';
-import { UpdateBuildComponentDto } from '../build-components/update-build-component.dto';
 
 @Injectable()
 export class BuildsService {
-  constructor(private readonly store: InMemoryStore) {}
+  constructor(private readonly database: DatabaseService) {}
 
   findAll() {
-    return this.store.builds
-      .filter((build) =>
-        this.store.buildComponents.some(
-          (entry) => entry.build_id === build.build_id,
-        ),
-      )
-      .map((build) => this.withRelations(build));
+    return this.loadBuilds();
   }
 
-  findOne(buildId: number) {
-    return this.withRelations(this.getBuild(buildId));
+  async findOne(buildId: number) {
+    const [build] = await this.loadBuilds(undefined, buildId);
+    if (!build) {
+      throw new NotFoundException('Build not found');
+    }
+    return build;
   }
 
-  create(dto: CreateBuildDto) {
+  async create(dto: CreateBuildDto) {
     if (!dto || typeof dto.name !== 'string' || dto.name.trim().length === 0) {
       throw new BadRequestException('Build name is required');
     }
     if (dto.description !== undefined && typeof dto.description !== 'string') {
       throw new BadRequestException('Build description must be a string');
     }
-
     if (!Array.isArray(dto.components) || dto.components.length === 0) {
       throw new BadRequestException('A build must have at least one component');
     }
-
     if (!Number.isInteger(dto.user_id) || dto.user_id < 1) {
       throw new BadRequestException('A valid user_id is required');
     }
-    if (!this.store.users.some((user) => user.user_id === dto.user_id)) {
+
+    const [user] = await this.database.db
+      .select({ user_id: users.user_id })
+      .from(users)
+      .where(eq(users.user_id, dto.user_id));
+    if (!user) {
       throw new BadRequestException('The specified user does not exist');
     }
 
@@ -58,7 +67,7 @@ export class BuildsService {
           'Each component entry must have a valid component_id',
         );
       }
-      this.requireComponent(component.component_id);
+      await this.requireComponent(component.component_id);
       this.validateQuantity(component.quantity);
       if (componentIds.has(component.component_id)) {
         throw new BadRequestException(
@@ -68,25 +77,30 @@ export class BuildsService {
       componentIds.add(component.component_id);
     }
 
-    const build = this.store.createBuild({
-      name: dto.name,
-      description: dto.description,
-      user_id: dto.user_id,
+    const buildId = await this.database.db.transaction(async (transaction) => {
+      const [inserted] = await transaction
+        .insert(builds)
+        .values({
+          name: dto.name,
+          description: dto.description,
+          user_id: dto.user_id,
+        })
+        .$returningId();
+      await transaction.insert(buildComponents).values(
+        dto.components.map((component) => ({
+          build_id: inserted.build_id,
+          component_id: component.component_id,
+          quantity: component.quantity,
+        })),
+      );
+      return inserted.build_id;
     });
 
-    this.store.buildComponents.push(
-      ...dto.components.map((component) => ({
-        build_id: build.build_id,
-        component_id: component.component_id,
-        quantity: component.quantity,
-      })),
-    );
-
-    return this.withRelations(build);
+    return this.findOne(buildId);
   }
 
-  update(buildId: number, dto: UpdateBuildDto) {
-    const build = this.getBuild(buildId);
+  async update(buildId: number, dto: UpdateBuildDto) {
+    await this.findOne(buildId);
     if (!dto || typeof dto !== 'object') {
       throw new BadRequestException('A request body is required');
     }
@@ -99,53 +113,56 @@ export class BuildsService {
     if (dto.description !== undefined && typeof dto.description !== 'string') {
       throw new BadRequestException('Build description must be a string');
     }
-    Object.assign(build, dto);
-    return this.withRelations(build);
-  }
 
-  remove(buildId: number) {
-    this.getBuild(buildId);
-    const buildIndex = this.store.builds.findIndex(
-      (build) => build.build_id === buildId,
-    );
-    this.store.builds.splice(buildIndex, 1);
-
-    for (
-      let index = this.store.buildComponents.length - 1;
-      index >= 0;
-      index--
-    ) {
-      if (this.store.buildComponents[index].build_id === buildId) {
-        this.store.buildComponents.splice(index, 1);
-      }
+    if (Object.keys(dto).length > 0) {
+      await this.database.db
+        .update(builds)
+        .set(dto)
+        .where(eq(builds.build_id, buildId));
     }
+    return this.findOne(buildId);
   }
 
-  findComponents(buildId: number) {
-    this.getBuild(buildId);
-    return this.store.buildComponents
-      .filter((entry) => entry.build_id === buildId)
-      .map((entry) => ({
-        ...this.requireComponent(entry.component_id),
-        quantity: entry.quantity,
-      }));
+  async remove(buildId: number) {
+    await this.findOne(buildId);
+    await this.database.db.delete(builds).where(eq(builds.build_id, buildId));
   }
 
-  addComponent(buildId: number, componentId: number, quantity: unknown) {
-    this.getBuild(buildId);
-    this.requireComponent(componentId);
+  async findComponents(buildId: number) {
+    await this.findOne(buildId);
+    const rows = await this.database.db
+      .select({ component: components, quantity: buildComponents.quantity })
+      .from(buildComponents)
+      .innerJoin(
+        components,
+        eq(buildComponents.component_id, components.component_id),
+      )
+      .where(eq(buildComponents.build_id, buildId));
+    return rows.map(({ component, quantity }) => ({
+      ...component,
+      quantity,
+    }));
+  }
+
+  async addComponent(buildId: number, componentId: number, quantity: unknown) {
+    await this.findOne(buildId);
+    await this.requireComponent(componentId);
     this.validateQuantity(quantity);
 
-    if (
-      this.store.buildComponents.some(
-        (entry) =>
-          entry.build_id === buildId && entry.component_id === componentId,
-      )
-    ) {
+    const [existing] = await this.database.db
+      .select({ component_id: buildComponents.component_id })
+      .from(buildComponents)
+      .where(
+        and(
+          eq(buildComponents.build_id, buildId),
+          eq(buildComponents.component_id, componentId),
+        ),
+      );
+    if (existing) {
       throw new BadRequestException('The component is already in this build');
     }
 
-    this.store.buildComponents.push({
+    await this.database.db.insert(buildComponents).values({
       build_id: buildId,
       component_id: componentId,
       quantity,
@@ -153,99 +170,126 @@ export class BuildsService {
     return this.findComponents(buildId);
   }
 
-  updateComponent(
+  async updateComponent(
     buildId: number,
     componentId: number,
     dto: UpdateBuildComponentDto | undefined,
   ) {
-    this.getBuild(buildId);
-    this.requireComponent(componentId);
+    await this.findOne(buildId);
+    await this.requireComponent(componentId);
     if (!dto || typeof dto !== 'object') {
       throw new BadRequestException('A request body is required');
     }
     this.validateQuantity(dto.quantity);
 
-    const entry = this.store.buildComponents.find(
-      (item) => item.build_id === buildId && item.component_id === componentId,
-    );
+    const [entry] = await this.database.db
+      .select({ component_id: buildComponents.component_id })
+      .from(buildComponents)
+      .where(
+        and(
+          eq(buildComponents.build_id, buildId),
+          eq(buildComponents.component_id, componentId),
+        ),
+      );
     if (!entry) {
       throw new NotFoundException('Component not found in this build');
     }
 
-    entry.quantity = dto.quantity;
+    await this.database.db
+      .update(buildComponents)
+      .set({ quantity: dto.quantity })
+      .where(
+        and(
+          eq(buildComponents.build_id, buildId),
+          eq(buildComponents.component_id, componentId),
+        ),
+      );
+    const [updated] = await this.database.db
+      .select({ component: components, quantity: buildComponents.quantity })
+      .from(buildComponents)
+      .innerJoin(
+        components,
+        eq(buildComponents.component_id, components.component_id),
+      )
+      .where(
+        and(
+          eq(buildComponents.build_id, buildId),
+          eq(buildComponents.component_id, componentId),
+        ),
+      );
     return {
-      ...this.requireComponent(componentId),
-      quantity: entry.quantity,
+      ...updated.component,
+      quantity: updated.quantity,
     };
   }
 
-  removeComponent(buildId: number, componentId: number) {
-    this.getBuild(buildId);
-    const entryIndex = this.store.buildComponents.findIndex(
-      (entry) =>
-        entry.build_id === buildId && entry.component_id === componentId,
-    );
-    if (entryIndex === -1) {
+  async removeComponent(buildId: number, componentId: number) {
+    await this.findOne(buildId);
+    const entries = await this.database.db
+      .select({ component_id: buildComponents.component_id })
+      .from(buildComponents)
+      .where(eq(buildComponents.build_id, buildId));
+    if (!entries.some((entry) => entry.component_id === componentId)) {
       throw new NotFoundException('Component not found in this build');
     }
-    if (
-      this.store.buildComponents.filter((entry) => entry.build_id === buildId)
-        .length === 1
-    ) {
+    if (entries.length === 1) {
       throw new BadRequestException('A build must have at least one component');
     }
 
-    this.store.buildComponents.splice(entryIndex, 1);
+    await this.database.db
+      .delete(buildComponents)
+      .where(
+        and(
+          eq(buildComponents.build_id, buildId),
+          eq(buildComponents.component_id, componentId),
+        ),
+      );
   }
 
-  findRelatedBuilds(buildId: number) {
-    const build = this.getBuild(buildId);
-    const categoryIds = new Set(
-      this.findComponents(buildId)
-        .map((component) => component.category_id)
-        .filter((categoryId): categoryId is number => categoryId !== undefined),
-    );
-
-    return this.store.builds
-      .filter(
-        (candidate) =>
-          candidate.build_id !== build.build_id &&
-          this.store.buildComponents.some((entry) => {
-            if (entry.build_id !== candidate.build_id) {
-              return false;
-            }
-            const component = this.requireComponent(entry.component_id);
-            return (
-              component.category_id !== undefined &&
-              categoryIds.has(component.category_id)
-            );
-          }),
-      )
-      .map((candidate) => this.withRelations(candidate));
-  }
-
-  // Finds a build by ID and throws a 404 error when it does not exist.
-  private getBuild(buildId: number) {
-    const build = this.store.builds.find((item) => item.build_id === buildId);
-    if (!build) {
-      throw new NotFoundException('Build not found');
+  async findRelatedBuilds(buildId: number) {
+    await this.findOne(buildId);
+    const buildItems = await this.findComponents(buildId);
+    const categoryIds = [
+      ...new Set(
+        buildItems
+          .map((component) => component.category_id)
+          .filter((categoryId): categoryId is number => categoryId !== null),
+      ),
+    ];
+    if (categoryIds.length === 0) {
+      return [];
     }
-    return build;
+
+    const related = await this.database.db
+      .selectDistinct({ build_id: builds.build_id })
+      .from(builds)
+      .innerJoin(buildComponents, eq(builds.build_id, buildComponents.build_id))
+      .innerJoin(
+        components,
+        eq(buildComponents.component_id, components.component_id),
+      )
+      .innerJoin(categories, eq(components.category_id, categories.category_id))
+      .where(
+        and(
+          ne(builds.build_id, buildId),
+          inArray(components.category_id, categoryIds),
+        ),
+      );
+
+    return this.loadBuilds(related.map(({ build_id }) => build_id));
   }
 
-  // Finds a component by ID and throws a 404 error when it does not exist.
-  private requireComponent(componentId: number) {
-    const component = this.store.components.find(
-      (item) => item.component_id === componentId,
-    );
+  private async requireComponent(componentId: number) {
+    const [component] = await this.database.db
+      .select({ component_id: components.component_id })
+      .from(components)
+      .where(eq(components.component_id, componentId));
     if (!component) {
       throw new NotFoundException('Component not found');
     }
     return component;
   }
 
-  // Checks that a quantity is a positive integer; the assertion also narrows
-  // the TypeScript type to number after this method succeeds.
   private validateQuantity(quantity: unknown): asserts quantity is number {
     if (
       typeof quantity !== 'number' ||
@@ -256,28 +300,70 @@ export class BuildsService {
     }
   }
 
-  // Returns a copy of the build enriched with its public user details and
-  // components, without exposing the stored password hash.
-  private withRelations(build: (typeof this.store.builds)[number]) {
-    const user = this.store.users.find(
-      (item) => item.user_id === build.user_id,
-    );
+  private async loadBuilds(buildIds?: number[], exactBuildId?: number) {
+    if (buildIds?.length === 0) {
+      return [];
+    }
+    const filters = [];
+    if (buildIds) {
+      filters.push(inArray(builds.build_id, buildIds));
+    }
+    if (exactBuildId !== undefined) {
+      filters.push(eq(builds.build_id, exactBuildId));
+    }
 
-    return {
+    const buildRows = await this.database.db
+      .select({
+        build: builds,
+        user: {
+          user_id: users.user_id,
+          username: users.username,
+          email: users.email,
+        },
+      })
+      .from(builds)
+      .innerJoin(users, eq(builds.user_id, users.user_id))
+      .innerJoin(buildComponents, eq(builds.build_id, buildComponents.build_id))
+      .where(filters.length > 0 ? and(...filters) : undefined);
+
+    const uniqueBuilds = new Map<number, (typeof buildRows)[number]>();
+    for (const row of buildRows) {
+      uniqueBuilds.set(row.build.build_id, row);
+    }
+    if (uniqueBuilds.size === 0) {
+      return [];
+    }
+
+    const ids = [...uniqueBuilds.keys()];
+    const entries = await this.database.db
+      .select({
+        build_id: buildComponents.build_id,
+        component: components,
+        quantity: buildComponents.quantity,
+      })
+      .from(buildComponents)
+      .innerJoin(
+        components,
+        eq(buildComponents.component_id, components.component_id),
+      )
+      .where(inArray(buildComponents.build_id, ids));
+    const entriesByBuild = new Map<
+      number,
+      Array<(typeof entries)[number]['component'] & { quantity: number }>
+    >();
+    for (const entry of entries) {
+      const componentsForBuild = entriesByBuild.get(entry.build_id) ?? [];
+      componentsForBuild.push({
+        ...entry.component,
+        quantity: entry.quantity,
+      });
+      entriesByBuild.set(entry.build_id, componentsForBuild);
+    }
+
+    return [...uniqueBuilds.values()].map(({ build, user }) => ({
       ...build,
-      user: user
-        ? {
-            user_id: user.user_id,
-            username: user.username,
-            email: user.email,
-          }
-        : null,
-      components: this.store.buildComponents
-        .filter((entry) => entry.build_id === build.build_id)
-        .map((entry) => ({
-          ...this.requireComponent(entry.component_id),
-          quantity: entry.quantity,
-        })),
-    };
+      user,
+      components: entriesByBuild.get(build.build_id) ?? [],
+    }));
   }
 }

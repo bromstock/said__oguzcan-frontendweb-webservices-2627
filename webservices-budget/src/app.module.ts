@@ -10,10 +10,10 @@ import { CategoriesService } from './categories/categories.service';
 import { UsersService } from './users/users.service';
 import { ComponentsService } from './components/components.service';
 import { CategoriesController } from './categories/categories.controller';
-import { InMemoryStore } from './in-memory-store';
+import { DatabaseModule } from './database/database.module';
 
 @Module({
-  imports: [],
+  imports: [DatabaseModule],
   controllers: [
     AppController,
     HealthController,
@@ -24,7 +24,6 @@ import { InMemoryStore } from './in-memory-store';
   ],
   providers: [
     AppService,
-    InMemoryStore,
     BuildsService,
     ComponentsService,
     UsersService,

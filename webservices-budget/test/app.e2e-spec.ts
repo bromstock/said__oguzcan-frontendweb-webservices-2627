@@ -25,36 +25,38 @@ describe('AppController (e2e)', () => {
   });
 
   it('supports the build, component, category, and user API flow', async () => {
+    const runId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const userResponse = await request(app.getHttpServer())
       .post('/api/users')
       .send({
-        username: 'builder',
-        email: 'builder@example.test',
+        username: `builder-${runId}`,
+        email: `builder-${runId}@example.test`,
         password_hash: 'test-hash',
       })
       .expect(201);
-    expect(userResponse.body).toMatchObject({
-      user_id: 1,
-      username: 'builder',
-      email: 'builder@example.test',
-    });
+    expect(userResponse.body.user_id).toEqual(expect.any(Number));
+    expect(userResponse.body.username).toBe(`builder-${runId}`);
     expect(userResponse.body.password_hash).toBeUndefined();
 
     const categoryResponse = await request(app.getHttpServer())
       .post('/api/categories')
-      .send({ name: 'Processor', description: 'CPUs' })
+      .send({ name: `Processor ${runId}`, description: 'CPUs' })
       .expect(201);
     const categoryId = categoryResponse.body.category_id as number;
 
     const componentResponse = await request(app.getHttpServer())
       .post('/api/components')
-      .send({ name: 'Example CPU', category_id: categoryId, price: 250 })
+      .send({
+        name: `Example CPU ${runId}`,
+        category_id: categoryId,
+        price: 250,
+      })
       .expect(201);
     const componentId = componentResponse.body.component_id as number;
 
     const secondComponentResponse = await request(app.getHttpServer())
       .post('/api/components')
-      .send({ name: 'Second CPU', category_id: categoryId })
+      .send({ name: `Second CPU ${runId}`, category_id: categoryId })
       .expect(201);
     const secondComponentId = secondComponentResponse.body
       .component_id as number;
@@ -62,7 +64,7 @@ describe('AppController (e2e)', () => {
     const buildResponse = await request(app.getHttpServer())
       .post('/api/builds')
       .send({
-        name: 'Workstation',
+        name: `Workstation ${runId}`,
         user_id: userResponse.body.user_id,
         components: [{ component_id: componentId, quantity: 1 }],
       })
@@ -74,7 +76,7 @@ describe('AppController (e2e)', () => {
     const relatedBuildResponse = await request(app.getHttpServer())
       .post('/api/builds')
       .send({
-        name: 'Another workstation',
+        name: `Another workstation ${runId}`,
         user_id: userResponse.body.user_id,
         components: [{ component_id: secondComponentId, quantity: 2 }],
       })
@@ -84,11 +86,15 @@ describe('AppController (e2e)', () => {
     await request(app.getHttpServer())
       .get('/api/builds')
       .expect(200)
-      .expect(({ body }) => expect(body).toHaveLength(2));
+      .expect(({ body }) =>
+        expect(
+          body.map((build: { build_id: number }) => build.build_id),
+        ).toEqual(expect.arrayContaining([buildId, relatedBuildId])),
+      );
     await request(app.getHttpServer())
       .get(`/api/builds/${buildId}`)
       .expect(200)
-      .expect(({ body }) => expect(body.name).toBe('Workstation'));
+      .expect(({ body }) => expect(body.name).toBe(`Workstation ${runId}`));
     await request(app.getHttpServer())
       .get(`/api/builds/${buildId}/components`)
       .expect(200)
@@ -104,15 +110,25 @@ describe('AppController (e2e)', () => {
     await request(app.getHttpServer())
       .get('/api/components')
       .expect(200)
-      .expect(({ body }) => expect(body).toHaveLength(2));
+      .expect(({ body }) =>
+        expect(
+          body.map(
+            (component: { component_id: number }) => component.component_id,
+          ),
+        ).toEqual(expect.arrayContaining([componentId, secondComponentId])),
+      );
     await request(app.getHttpServer())
       .get(`/api/components/${componentId}`)
       .expect(200)
-      .expect(({ body }) => expect(body.name).toBe('Example CPU'));
+      .expect(({ body }) => expect(body.name).toBe(`Example CPU ${runId}`));
     await request(app.getHttpServer())
       .get('/api/categories')
       .expect(200)
-      .expect(({ body }) => expect(body).toHaveLength(1));
+      .expect(({ body }) =>
+        expect(
+          body.map((category: { category_id: number }) => category.category_id),
+        ).toContain(categoryId),
+      );
     await request(app.getHttpServer())
       .get(`/api/categories/${categoryId}/components`)
       .expect(200)

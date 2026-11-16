@@ -36,6 +36,21 @@ $ pnpm approve-builds
 
 ```
 
+## Database
+
+The API uses MySQL through Drizzle ORM. Create a MySQL database, copy
+`.env.example` to `.env`, and set `DB_HOST`, `DB_PORT`, `DB_USER`,
+`DB_PASSWORD`, and `DB_NAME`.
+
+Generate and run schema migrations from this directory:
+
+```bash
+pnpm run db:generate
+pnpm run db:migrate
+```
+
+The application does not create or alter tables at startup.
+
 ## Compile and run the project
 
 ```bash

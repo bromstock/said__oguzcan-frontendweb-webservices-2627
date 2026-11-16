@@ -3,30 +3,39 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { eq } from 'drizzle-orm';
 import { CreateComponentDto } from './create-component.dto';
-import { InMemoryStore } from '../in-memory-store';
+import { DatabaseService } from '../database/database.service';
+import { categories, components } from '../database/schema';
 
 @Injectable()
 export class ComponentsService {
-  constructor(private readonly store: InMemoryStore) {}
+  constructor(private readonly database: DatabaseService) {}
 
-  findAll() {
-    return this.store.components.map((component) =>
-      this.withCategory(component),
-    );
+  async findAll() {
+    const results = await this.database.db
+      .select({ component: components, category: categories })
+      .from(components)
+      .leftJoin(categories, eq(components.category_id, categories.category_id));
+    return results.map(({ component, category }) => ({
+      ...component,
+      category,
+    }));
   }
 
-  findOne(componentId: number) {
-    const component = this.store.components.find(
-      (item) => item.component_id === componentId,
-    );
-    if (!component) {
+  async findOne(componentId: number) {
+    const [result] = await this.database.db
+      .select({ component: components, category: categories })
+      .from(components)
+      .leftJoin(categories, eq(components.category_id, categories.category_id))
+      .where(eq(components.component_id, componentId));
+    if (!result) {
       throw new NotFoundException('Component not found');
     }
-    return this.withCategory(component);
+    return { ...result.component, category: result.category };
   }
 
-  create(dto: CreateComponentDto) {
+  async create(dto: CreateComponentDto) {
     if (!dto || typeof dto !== 'object') {
       throw new BadRequestException('A request body is required');
     }
@@ -68,38 +77,42 @@ export class ComponentsService {
     if (dto.category_id !== undefined && !Number.isInteger(dto.category_id)) {
       throw new BadRequestException('Category ID must be an integer');
     }
-    if (
-      dto.category_id !== undefined &&
-      !this.store.categories.some(
-        (category) => category.category_id === dto.category_id,
-      )
-    ) {
-      throw new BadRequestException('The specified category does not exist');
+    if (dto.category_id !== undefined) {
+      const [category] = await this.database.db
+        .select({ category_id: categories.category_id })
+        .from(categories)
+        .where(eq(categories.category_id, dto.category_id));
+      if (!category) {
+        throw new BadRequestException('The specified category does not exist');
+      }
     }
 
-    return this.withCategory(this.store.createComponent(dto));
+    const [inserted] = await this.database.db
+      .insert(components)
+      .values(dto)
+      .$returningId();
+    return this.findOne(inserted.component_id);
   }
 
-  findByCategory(categoryId: number) {
-    if (
-      !this.store.categories.some((item) => item.category_id === categoryId)
-    ) {
+  async findByCategory(categoryId: number) {
+    const [category] = await this.database.db
+      .select({ category_id: categories.category_id })
+      .from(categories)
+      .where(eq(categories.category_id, categoryId));
+    if (!category) {
       throw new NotFoundException('Category not found');
     }
-    return this.store.components
-      .filter((component) => component.category_id === categoryId)
-      .map((component) => this.withCategory(component));
-  }
 
-  // Returns a copy of the component with its category attached, or null when
-  // it has no matching category.
-  private withCategory(component: (typeof this.store.components)[number]) {
-    const category = this.store.categories.find(
-      (item) => item.category_id === component.category_id,
-    );
-    return {
-      ...component,
-      category: category ?? null,
-    };
+    return this.database.db
+      .select({ component: components, category: categories })
+      .from(components)
+      .leftJoin(categories, eq(components.category_id, categories.category_id))
+      .where(eq(components.category_id, categoryId))
+      .then((results) =>
+        results.map(({ component, category }) => ({
+          ...component,
+          category,
+        })),
+      );
   }
 }
